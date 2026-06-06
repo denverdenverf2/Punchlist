@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { COStatusActions } from './status-actions'
+import { buttonVariants } from '@/components/ui/button'
+import { Download } from 'lucide-react'
 
 const statusColor: Record<string, string> = {
   draft: 'bg-zinc-100 text-zinc-600',
@@ -63,9 +64,19 @@ export default async function ChangeOrderDetailPage({
           <h1 className="text-2xl font-bold text-zinc-900">{co.title}</h1>
           <p className="text-sm text-zinc-500 mt-1">{reasonLabel[co.reason]}</p>
         </div>
-        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColor[co.status]}`}>
-          {co.status.replace(/_/g, ' ')}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColor[co.status]}`}>
+            {co.status.replace(/_/g, ' ')}
+          </span>
+          <a
+            href={`/api/change-orders/${coid}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            <Download className="h-4 w-4 mr-1" /> PDF
+          </a>
+        </div>
       </div>
 
       {co.description && (
