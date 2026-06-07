@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { buttonVariants } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 
 const statusColor: Record<string, string> = {
   draft: 'bg-zinc-100 text-zinc-600',
@@ -73,7 +75,12 @@ export default async function ChangeOrdersPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-zinc-900">Change Orders</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-zinc-900">Change Orders</h1>
+        <Link href="/dashboard/change-orders/new" className={buttonVariants({ size: 'sm' })}>
+          <Plus className="h-4 w-4 mr-1" /> New Change Order
+        </Link>
+      </div>
 
       {pending.length > 0 && (
         <section className="space-y-3">

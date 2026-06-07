@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { buttonVariants } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 
 const statusColor: Record<string, string> = {
   draft: 'bg-zinc-100 text-zinc-600',
@@ -23,7 +25,12 @@ export default async function QuotesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-zinc-900">Quotes</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-zinc-900">Quotes</h1>
+        <Link href="/dashboard/quotes/new" className={buttonVariants({ size: 'sm' })}>
+          <Plus className="h-4 w-4 mr-1" /> New Quote
+        </Link>
+      </div>
       {!quotes?.length ? (
         <p className="text-sm text-zinc-500">No quotes yet. Create one from a project.</p>
       ) : (
