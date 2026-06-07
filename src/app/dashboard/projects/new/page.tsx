@@ -26,11 +26,26 @@ export default function NewProjectPage() {
     setLoading(true)
     setError(null)
 
+    const { data: { user } } = await supabase.auth.getUser()
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('company_id')
-      .eq('id', (await supabase.auth.getUser()).data.user!.id)
+      .eq('id', user!.id)
       .single()
+
+    let companyId = profile?.company_id
+
+    // Auto-create a company if none exists yet
+    if (!companyId) {
+      const { data: company } = await supabase
+        .from('companies')
+        .insert({ name: 'My Company' })
+        .select()
+        .single()
+      companyId = company?.id
+      await supabase.from('profiles').update({ company_id: companyId }).eq('id', user!.id)
+    }
 
     const { data, error } = await supabase
       .from('projects')
@@ -39,7 +54,7 @@ export default function NewProjectPage() {
         address: form.address || null,
         status: form.status as 'active' | 'completed' | 'on_hold',
         contract_value: form.contract_value ? parseFloat(form.contract_value) : null,
-        company_id: profile?.company_id ?? '',
+        company_id: companyId,
       })
       .select()
       .single()
