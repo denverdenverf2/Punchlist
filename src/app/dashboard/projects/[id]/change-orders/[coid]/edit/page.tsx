@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -21,14 +21,12 @@ type LineItem = {
   cost_code: string
 }
 
+// Only these statuses are editable; once it's gone to the client it's locked.
+const EDITABLE_STATUSES = ['draft', 'submitted', 'office_review']
+
 const emptyItem = (): LineItem => ({
-  description: '',
-  quantity: '1',
-  unit: 'ea',
-  unit_cost: '0',
-  markup_percent: '0',
-  category: 'labor',
-  cost_code: '',
+  description: '', quantity: '1', unit: 'ea', unit_cost: '0',
+  markup_percent: '0', category: 'labor', cost_code: '',
 })
 
 function itemTotal(item: LineItem) {
@@ -36,12 +34,15 @@ function itemTotal(item: LineItem) {
   return base * (1 + parseFloat(item.markup_percent || '0') / 100)
 }
 
-export default function NewChangeOrderPage() {
+export default function EditChangeOrderPage() {
   const router = useRouter()
   const params = useParams()
   const projectId = params.id as string
+  const coid = params.coid as string
   const supabase = createClient()
 
+  const [ready, setReady] = useState(false)
+  const [locked, setLocked] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -49,7 +50,34 @@ export default function NewChangeOrderPage() {
   const [reason, setReason] = useState('scope_change')
   const [markup, setMarkup] = useState('0')
   const [items, setItems] = useState<LineItem[]>([emptyItem()])
-  const [files, setFiles] = useState<File[]>([])
+
+  useEffect(() => {
+    async function load() {
+      const [{ data: co }, { data: lines }] = await Promise.all([
+        supabase.from('change_orders').select('*').eq('id', coid).single(),
+        supabase.from('line_items').select('*').eq('parent_type', 'change_order').eq('parent_id', coid),
+      ])
+      if (!co) { setError('Change order not found'); setReady(true); return }
+      if (!EDITABLE_STATUSES.includes(co.status)) { setLocked(true); setReady(true); return }
+
+      setTitle(co.title)
+      setDescription(co.description ?? '')
+      setReason(co.reason)
+      setMarkup(String(co.markup_percent))
+      const loaded = (lines ?? []).map((l: Record<string, unknown>) => ({
+        description: String(l.description ?? ''),
+        quantity: String(l.quantity ?? '1'),
+        unit: String(l.unit ?? 'ea'),
+        unit_cost: String(l.unit_cost ?? '0'),
+        markup_percent: String(l.markup_percent ?? '0'),
+        category: String(l.category ?? 'labor'),
+        cost_code: String(l.cost_code ?? ''),
+      }))
+      setItems(loaded.length ? loaded : [emptyItem()])
+      setReady(true)
+    }
+    load()
+  }, [supabase, coid])
 
   const subtotal = items.reduce((sum, item) => sum + itemTotal(item), 0)
   const total = subtotal * (1 + parseFloat(markup || '0') / 100)
@@ -63,72 +91,57 @@ export default function NewChangeOrderPage() {
     setLoading(true)
     setError(null)
 
-    const { data: { user } } = await supabase.auth.getUser()
-
-    // Get next CO number
-    const { data: coNumberData } = await supabase.rpc('next_co_number', { p_project_id: projectId })
-
-    const { data: co, error: coError } = await supabase
+    const { error: coErr } = await supabase
       .from('change_orders')
-      .insert({
-        project_id: projectId,
-        co_number: coNumberData,
+      .update({
         title,
         description: description || null,
         reason: reason as 'scope_change' | 'unforeseen' | 'owner_request' | 'other',
-        status: 'submitted',
-        submitted_by: user!.id,
-        submitted_at: new Date().toISOString(),
         subtotal,
         markup_percent: parseFloat(markup),
         total,
       })
-      .select()
-      .single()
+      .eq('id', coid)
 
-    if (coError) { setError(coError.message); setLoading(false); return }
+    if (coErr) { setError(coErr.message); setLoading(false); return }
 
-    // Insert line items
-    if (items.some(i => i.description)) {
-      const lineItems = items
-        .filter(i => i.description)
-        .map(i => ({
-          parent_type: 'change_order',
-          parent_id: co.id,
-          description: i.description,
-          quantity: parseFloat(i.quantity),
-          unit: i.unit,
-          unit_cost: parseFloat(i.unit_cost),
-          markup_percent: parseFloat(i.markup_percent),
-          total: itemTotal(i),
-          cost_code: i.cost_code || null,
-          category: i.category as 'labor' | 'material' | 'equipment' | 'subcontractor',
-        }))
+    // Replace line items wholesale (simpler + correct vs. diffing).
+    await supabase.from('line_items').delete().eq('parent_type', 'change_order').eq('parent_id', coid)
+    const lineItems = items.filter(i => i.description).map(i => ({
+      parent_type: 'change_order',
+      parent_id: coid,
+      description: i.description,
+      quantity: parseFloat(i.quantity),
+      unit: i.unit,
+      unit_cost: parseFloat(i.unit_cost),
+      markup_percent: parseFloat(i.markup_percent),
+      total: itemTotal(i),
+      cost_code: i.cost_code || null,
+      category: i.category as 'labor' | 'material' | 'equipment' | 'subcontractor',
+    }))
+    if (lineItems.length) await supabase.from('line_items').insert(lineItems)
 
-      await supabase.from('line_items').insert(lineItems)
-    }
+    router.push(`/dashboard/projects/${projectId}/change-orders/${coid}`)
+  }
 
-    // Upload attachments
-    for (const file of files) {
-      const path = `${co.id}/${Date.now()}-${file.name}`
-      const { data: upload } = await supabase.storage.from('attachments').upload(path, file)
-      if (upload) {
-        const { data: { publicUrl } } = supabase.storage.from('attachments').getPublicUrl(path)
-        await supabase.from('change_order_attachments').insert({
-          change_order_id: co.id,
-          file_url: publicUrl,
-          file_name: file.name,
-          uploaded_by: user!.id,
-        })
-      }
-    }
-
-    router.push(`/dashboard/projects/${projectId}/change-orders/${co.id}`)
+  if (!ready) return <p className="text-sm text-zinc-500">Loading…</p>
+  if (locked) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <h1 className="text-2xl font-bold text-zinc-900">Change Order locked</h1>
+        <p className="text-sm text-zinc-500">
+          This change order has already been sent to the client (or finalized) and can no longer be edited.
+        </p>
+        <Button variant="outline" onClick={() => router.push(`/dashboard/projects/${projectId}/change-orders/${coid}`)}>
+          Back to change order
+        </Button>
+      </div>
+    )
   }
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold text-zinc-900">New Change Order</h1>
+      <h1 className="text-2xl font-bold text-zinc-900">Edit Change Order</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
@@ -136,7 +149,7 @@ export default function NewChangeOrderPage() {
           <CardContent className="space-y-4">
             <div className="space-y-1">
               <Label>Title *</Label>
-              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Brief description of the change" required />
+              <Input value={title} onChange={e => setTitle(e.target.value)} required />
             </div>
             <div className="space-y-1">
               <Label>Reason</Label>
@@ -152,7 +165,7 @@ export default function NewChangeOrderPage() {
             </div>
             <div className="space-y-1">
               <Label>Description</Label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Explain what changed and why…" rows={3} />
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} />
             </div>
           </CardContent>
         </Card>
@@ -172,7 +185,7 @@ export default function NewChangeOrderPage() {
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs">Description</Label>
-                    <Input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="What work / material?" />
+                    <Input value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} />
                   </div>
                   {items.length > 1 && (
                     <button type="button" onClick={() => setItems(p => p.filter((_, j) => j !== i))} className="mt-6 text-zinc-400 hover:text-red-500">
@@ -187,7 +200,7 @@ export default function NewChangeOrderPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Unit</Label>
-                    <Input value={item.unit} onChange={e => updateItem(i, 'unit', e.target.value)} placeholder="ea, hr, ft…" />
+                    <Input value={item.unit} onChange={e => updateItem(i, 'unit', e.target.value)} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Unit Cost ($)</Label>
@@ -233,29 +246,9 @@ export default function NewChangeOrderPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle>Photos / Attachments</CardTitle></CardHeader>
-          <CardContent>
-            <input
-              type="file"
-              multiple
-              accept="image/*,.pdf"
-              onChange={e => setFiles(Array.from(e.target.files ?? []))}
-              className="block w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200"
-            />
-            {files.length > 0 && (
-              <ul className="mt-2 text-xs text-zinc-500 space-y-0.5">
-                {files.map(f => <li key={f.name}>{f.name}</li>)}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
         {error && <p className="text-sm text-red-500">{error}</p>}
         <div className="flex gap-2">
-          <Button type="submit" disabled={loading} className="flex-1 sm:flex-none">
-            {loading ? 'Submitting…' : 'Submit Change Order'}
-          </Button>
+          <Button type="submit" disabled={loading}>{loading ? 'Saving…' : 'Save Changes'}</Button>
           <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
         </div>
       </form>

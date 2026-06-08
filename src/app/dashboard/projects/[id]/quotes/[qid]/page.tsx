@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { QuoteStatusActions } from './status-actions'
-import { Download } from 'lucide-react'
+import { GenerateBidButton } from './bid-actions'
+import Link from 'next/link'
+import { Download, Pencil } from 'lucide-react'
 
 const statusColor: Record<string, string> = {
   draft: 'bg-zinc-100 text-zinc-600',
@@ -20,9 +22,10 @@ export default async function QuoteDetailPage({
   const { id: projectId, qid } = await params
   const supabase = await createClient()
 
-  const [quoteRes, sectionsRes] = await Promise.all([
+  const [quoteRes, sectionsRes, bidsRes] = await Promise.all([
     supabase.from('quotes').select('*, projects:project_id(name)').eq('id', qid).single(),
-    supabase.from('quote_sections').select('*, quote_line_items(*)').eq('quote_id', qid).order('sort_order'),
+    supabase.from('quote_sections').select('*, line_items(*)').eq('quote_id', qid).order('sort_order'),
+    supabase.from('bids').select('id, version, status, total').eq('quote_id', qid).order('version'),
   ])
 
   const quote = quoteRes.data as {
@@ -33,14 +36,18 @@ export default async function QuoteDetailPage({
 
   const sections = sectionsRes.data as Array<{
     id: string; name: string; sort_order: number
-    quote_line_items: Array<{
+    line_items: Array<{
       id: string; description: string; quantity: number; unit: string
       unit_cost: number; markup_percent: number; total: number
       cost_code: string | null; category: string
     }>
   }> | null
 
+  const bids = bidsRes.data as Array<{ id: string; version: number; status: string; total: number }> | null
+
   if (!quote) notFound()
+
+  const canEdit = quote.status === 'draft'
 
   const { data: profileRes } = await supabase
     .from('profiles')
@@ -49,7 +56,7 @@ export default async function QuoteDetailPage({
     .single()
   const userRole = (profileRes as { role?: string } | null)?.role ?? 'office'
 
-  const categoryTotals = sections?.flatMap(s => s.quote_line_items).reduce((acc, item) => {
+  const categoryTotals = sections?.flatMap(s => s.line_items).reduce((acc, item) => {
     acc[item.category] = (acc[item.category] ?? 0) + Number(item.total)
     return acc
   }, {} as Record<string, number>) ?? {}
@@ -73,6 +80,15 @@ export default async function QuoteDetailPage({
           >
             <Download className="h-4 w-4 mr-1" /> PDF
           </a>
+          {canEdit && (
+            <Link
+              href={`/dashboard/projects/${projectId}/quotes/${qid}/edit`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <Pencil className="h-4 w-4 mr-1" /> Edit
+            </Link>
+          )}
+          <GenerateBidButton quoteId={qid} projectId={projectId} quoteTotal={Number(quote.total)} hasBids={!!(bids && bids.length > 0)} />
         </div>
       </div>
 
@@ -100,7 +116,7 @@ export default async function QuoteDetailPage({
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">{section.name}</CardTitle>
               <span className="text-sm font-medium text-zinc-700">
-                ${section.quote_line_items.reduce((s, i) => s + Number(i.total), 0).toFixed(2)}
+                ${section.line_items.reduce((s, i) => s + Number(i.total), 0).toFixed(2)}
               </span>
             </div>
           </CardHeader>
@@ -116,7 +132,7 @@ export default async function QuoteDetailPage({
                 </tr>
               </thead>
               <tbody>
-                {section.quote_line_items.map(item => (
+                {section.line_items.map(item => (
                   <tr key={item.id} className="border-b last:border-0">
                     <td className="py-2">
                       {item.description}
@@ -162,6 +178,27 @@ export default async function QuoteDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {bids && bids.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Bids from this quote</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {bids.map(b => (
+              <Link
+                key={b.id}
+                href={`/dashboard/bids/${b.id}`}
+                className="flex items-center justify-between text-sm hover:bg-zinc-50 rounded px-2 py-1.5 -mx-2"
+              >
+                <span className="font-medium text-zinc-900">Bid v{b.version}</span>
+                <span className="flex items-center gap-3">
+                  <span className="capitalize text-zinc-500">{b.status}</span>
+                  <span className="font-medium tabular-nums">${Number(b.total).toFixed(2)}</span>
+                </span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <QuoteStatusActions quoteId={qid} currentStatus={quote.status} userRole={userRole} projectId={projectId} />
     </div>

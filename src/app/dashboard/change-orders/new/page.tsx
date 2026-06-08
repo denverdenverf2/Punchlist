@@ -97,7 +97,8 @@ export default function NewChangeOrderPage() {
     if (coError) { setError(coError.message); setLoading(false); return }
 
     const lineItems = items.filter(i => i.description).map(i => ({
-      change_order_id: co.id,
+      parent_type: 'change_order',
+      parent_id: co.id,
       description: i.description,
       quantity: parseFloat(i.quantity),
       unit: i.unit,
@@ -107,7 +108,7 @@ export default function NewChangeOrderPage() {
       cost_code: i.cost_code || null,
       category: i.category,
     }))
-    if (lineItems.length) await supabase.from('change_order_line_items').insert(lineItems)
+    if (lineItems.length) await supabase.from('line_items').insert(lineItems)
 
     for (const file of files) {
       const path = `${co.id}/${Date.now()}-${file.name}`

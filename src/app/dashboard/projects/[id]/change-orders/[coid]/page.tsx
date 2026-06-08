@@ -2,8 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { COStatusActions } from './status-actions'
+import { AttachmentManager } from './attachment-manager'
 import { buttonVariants } from '@/components/ui/button'
-import { Download } from 'lucide-react'
+import Link from 'next/link'
+import { Download, Pencil } from 'lucide-react'
+
+const EDITABLE_STATUSES = ['draft', 'submitted', 'office_review']
 
 const statusColor: Record<string, string> = {
   draft: 'bg-zinc-100 text-zinc-600',
@@ -36,7 +40,7 @@ export default async function ChangeOrderDetailPage({
 
   const [coRes, lineItemsRes, attachmentsRes, commentsRes] = await Promise.all([
     supabase.from('change_orders').select('*').eq('id', coid).single(),
-    supabase.from('change_order_line_items').select('*').eq('change_order_id', coid),
+    supabase.from('line_items').select('*').eq('parent_type', 'change_order').eq('parent_id', coid),
     supabase.from('change_order_attachments').select('*').eq('change_order_id', coid),
     supabase.from('change_order_comments').select('id, body, created_at, user_id, profiles:user_id(full_name, email)').eq('change_order_id', coid).order('created_at'),
   ])
@@ -55,6 +59,8 @@ export default async function ChangeOrderDetailPage({
   }> | null
 
   if (!co) notFound()
+
+  const canEdit = EDITABLE_STATUSES.includes(co.status)
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -76,6 +82,14 @@ export default async function ChangeOrderDetailPage({
           >
             <Download className="h-4 w-4 mr-1" /> PDF
           </a>
+          {canEdit && (
+            <Link
+              href={`/dashboard/projects/${projectId}/change-orders/${coid}/edit`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              <Pencil className="h-4 w-4 mr-1" /> Edit
+            </Link>
+          )}
         </div>
       </div>
 
@@ -125,18 +139,12 @@ export default async function ChangeOrderDetailPage({
         </CardContent>
       </Card>
 
-      {attachments && attachments.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Attachments</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            {attachments.map(a => (
-              <a key={a.id} href={a.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                📎 {a.file_name}
-              </a>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader><CardTitle className="text-base">Attachments</CardTitle></CardHeader>
+        <CardContent>
+          <AttachmentManager attachments={attachments ?? []} canEdit={canEdit} />
+        </CardContent>
+      </Card>
 
       <COStatusActions co={co} userRole={profile?.role ?? 'office'} projectId={projectId} />
 

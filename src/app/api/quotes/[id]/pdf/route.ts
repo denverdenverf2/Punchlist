@@ -19,7 +19,7 @@ export async function GET(
       .single(),
     supabase
       .from('quote_sections')
-      .select('name, sort_order, quote_line_items(description, quantity, unit, unit_cost, markup_percent, total, cost_code, category, sort_order)')
+      .select('name, sort_order, line_items(description, quantity, unit, unit_cost, markup_percent, total, cost_code, category, sort_order)')
       .eq('quote_id', id)
       .order('sort_order'),
   ])
@@ -34,7 +34,7 @@ export async function GET(
   const sections = (sectionsRes.data ?? []).map((s: any) => ({
     name: s.name as string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items: s.quote_line_items as any[],
+    items: s.line_items as any[],
   }))
 
   const element = React.createElement(QuotePDF, {

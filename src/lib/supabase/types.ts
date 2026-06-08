@@ -93,10 +93,13 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['quote_sections']['Row'], 'id'>
         Update: Partial<Database['public']['Tables']['quote_sections']['Insert']>
       }
-      quote_line_items: {
+      line_items: {
         Row: {
           id: string
-          section_id: string
+          parent_type: 'quote' | 'change_order'
+          parent_id: string
+          section_id: string | null
+          vendor_quote_id: string | null
           description: string
           quantity: number
           unit: string
@@ -106,9 +109,10 @@ export interface Database {
           cost_code: string | null
           category: LineItemCategory
           sort_order: number
+          created_at: string
         }
-        Insert: Omit<Database['public']['Tables']['quote_line_items']['Row'], 'id'>
-        Update: Partial<Database['public']['Tables']['quote_line_items']['Insert']>
+        Insert: Omit<Database['public']['Tables']['line_items']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['line_items']['Insert']>
       }
       change_orders: {
         Row: {
@@ -133,22 +137,6 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['change_orders']['Row'], 'id' | 'co_number' | 'created_at'>
         Update: Partial<Database['public']['Tables']['change_orders']['Insert']>
       }
-      change_order_line_items: {
-        Row: {
-          id: string
-          change_order_id: string
-          description: string
-          quantity: number
-          unit: string
-          unit_cost: number
-          markup_percent: number
-          total: number
-          cost_code: string | null
-          category: LineItemCategory
-        }
-        Insert: Omit<Database['public']['Tables']['change_order_line_items']['Row'], 'id'>
-        Update: Partial<Database['public']['Tables']['change_order_line_items']['Insert']>
-      }
       change_order_attachments: {
         Row: {
           id: string
@@ -171,6 +159,70 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['change_order_comments']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['change_order_comments']['Insert']>
+      }
+      vendors: {
+        Row: {
+          id: string
+          company_id: string
+          name: string
+          trade: string | null
+          contact_name: string | null
+          email: string | null
+          phone: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['vendors']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['vendors']['Insert']>
+      }
+      vendor_quotes: {
+        Row: {
+          id: string
+          vendor_id: string
+          project_id: string
+          description: string | null
+          amount: number
+          status: 'received' | 'accepted' | 'rejected' | 'expired'
+          document_url: string | null
+          received_at: string | null
+          logged_by: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['vendor_quotes']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['vendor_quotes']['Insert']>
+      }
+      bids: {
+        Row: {
+          id: string
+          project_id: string
+          quote_id: string | null
+          version: number
+          status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'superseded'
+          total: number
+          snapshot: unknown | null
+          notes: string | null
+          sent_at: string | null
+          responded_at: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['bids']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['bids']['Insert']>
+      }
+      contracts: {
+        Row: {
+          id: string
+          project_id: string
+          bid_id: string
+          status: 'pending' | 'signed' | 'voided'
+          contract_value: number
+          signer_name: string | null
+          signature_url: string | null
+          signed_at: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['contracts']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['contracts']['Insert']>
       }
     }
   }
