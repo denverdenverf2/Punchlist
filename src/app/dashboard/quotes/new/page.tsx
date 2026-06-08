@@ -85,11 +85,12 @@ export default function NewQuoteStandalonePage() {
       const { data: sec } = await supabase.from('quote_sections').insert({ quote_id: quote.id, name: section.name, sort_order: si }).select().single()
       if (!sec) continue
       const lineItems = section.items.filter(i => i.description).map((item, ii) => ({
+        parent_type: 'quote', parent_id: quote.id,
         section_id: sec.id, description: item.description, quantity: parseFloat(item.quantity),
         unit: item.unit, unit_cost: parseFloat(item.unit_cost), markup_percent: parseFloat(item.markup_percent),
         total: itemTotal(item), cost_code: item.cost_code || null, category: item.category, sort_order: ii,
       }))
-      if (lineItems.length) await supabase.from('quote_line_items').insert(lineItems)
+      if (lineItems.length) await supabase.from('line_items').insert(lineItems)
     }
 
     router.push(`/dashboard/projects/${projectId}/quotes/${quote.id}`)

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, FolderOpen, FileText, ClipboardList, LogOut } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, FileText, ClipboardList, Hammer, FileSignature, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -12,6 +12,8 @@ const navItems = [
   { href: '/dashboard/projects', label: 'Projects', icon: FolderOpen },
   { href: '/dashboard/change-orders', label: 'Change Orders', icon: ClipboardList },
   { href: '/dashboard/quotes', label: 'Quotes', icon: FileText },
+  { href: '/dashboard/bids', label: 'Bids', icon: FileSignature },
+  { href: '/dashboard/vendors', label: 'Vendors', icon: Hammer },
 ]
 
 export function Sidebar() {

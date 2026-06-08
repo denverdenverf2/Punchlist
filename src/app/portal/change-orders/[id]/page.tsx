@@ -9,7 +9,7 @@ export default async function PortalCOPage({ params }: { params: Promise<{ id: s
 
   const [coRes, lineItemsRes] = await Promise.all([
     supabase.from('change_orders').select('id, co_number, title, description, status, subtotal, markup_percent, total, project_id, projects:project_id(name, address)').eq('id', id).single(),
-    supabase.from('change_order_line_items').select('id, description, quantity, unit, unit_cost, total').eq('change_order_id', id),
+    supabase.from('line_items').select('id, description, quantity, unit, unit_cost, total').eq('parent_type', 'change_order').eq('parent_id', id),
   ])
 
   const co = coRes.data as {

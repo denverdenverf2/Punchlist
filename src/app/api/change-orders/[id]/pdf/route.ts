@@ -18,9 +18,10 @@ export async function GET(
       .eq('id', id)
       .single(),
     supabase
-      .from('change_order_line_items')
+      .from('line_items')
       .select('description, quantity, unit, unit_cost, total, category')
-      .eq('change_order_id', id),
+      .eq('parent_type', 'change_order')
+      .eq('parent_id', id),
   ])
 
   if (!coRes.data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
